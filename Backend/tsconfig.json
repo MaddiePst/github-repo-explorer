@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "es2020", // Compile modern JS syntax
+    "module": "commonjs", // Use CommonJS for Node compatibility
+    "moduleResolution": "node", // Resolve imports like Node.js
+    "esModuleInterop": true, // Allow default import for CJS modules
+    "forceConsistentCasingInFileNames": true,
+    "strict": true, // Enable all strict type-checking options
+    "skipLibCheck": true, // Speed up builds
+    "outDir": "./dist", // Where compiled JS files go
+    "resolveJsonModule": true, // Allow importing .json files
+    "sourceMap": true // Generate source maps for debugging
+  },
+  "include": ["./**/*.ts"], // Include all TypeScript files
+  "exclude": ["node_modules", "dist"] // Ignore these folders
+}
