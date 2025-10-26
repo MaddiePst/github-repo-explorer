@@ -11,8 +11,11 @@ const router = Router();
 
 router.use(authMiddleware); // protect all routes below
 
+// Get all fav repo
 router.get("/favorites", getFavorites);
+// Add fav repo
 router.post("/favorites", addFavorite);
+//Delete fav repo
 router.delete("/favorites/:id", deleteFavorite);
 
 export default router;
