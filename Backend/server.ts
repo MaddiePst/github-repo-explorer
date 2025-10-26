@@ -1,24 +1,25 @@
-// server.ts
+import dotenv from "dotenv"; // reads env file
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import morgan from "morgan";
 import authRoutes from "./Routes/authRoutes";
-import userRoutes from "./Routes/repoRoutes";
+import repoRoutes from "./Routes/repoRoutes";
 
-dotenv.config(); // run once, immediately
 const app = express();
 const PORT = Number(process.env.PORT || 8000);
 
 app.use(cors());
-app.use(express.json());
-app.use(morgan("dev"));
+app.use(express.json()); // parses incoming JSON request bodies
+app.use(morgan("dev")); // logs requests to the console
 
 app.use("/auth", authRoutes);
-app.use("/user", userRoutes);
+app.use("/repo", repoRoutes);
 
 app.get("/", (req, res) => res.send("GitHub Repo Explorer API"));
 
+// Error handler
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("Unhandled error:", err);
   res
