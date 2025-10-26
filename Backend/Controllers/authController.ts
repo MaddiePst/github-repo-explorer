@@ -1,40 +1,28 @@
-// Controllers/authController.ts
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt, { SignOptions } from "jsonwebtoken";
 import { supabase } from "../Connections/supabaseClient";
-import dotenv from "dotenv";
-dotenv.config();
 
-//Config / constants
-const SALT_ROUNDS = 10;
+// Constants
+const SALT_ROUNDS = Number(process.env.SALT_ROUNDS) || 10; //Number of bcrypt rounds
 
-/**
- * Helper: ensure JWT env vars are present and return typed values
- */
-function getJwtConfig(): {
-  SECRET: jwt.Secret;
-  expiresIn: SignOptions["expiresIn"];
-} {
-  const SECRET = process.env.JWT_SECRET;
-  const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "1h";
+// Read the JWT secret and expiry from env.
+const RAW_JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN ??
+  "1h") as SignOptions["expiresIn"];
 
-  if (!SECRET) {
-    // fail fast — caller can catch and return a 500
-    throw new Error("Missing JWT_SECRET environment variable");
-  }
-
-  // typed for SignOptions
-  return {
-    SECRET: SECRET as jwt.Secret,
-    expiresIn: JWT_EXPIRES_IN as SignOptions["expiresIn"],
-  };
+// Fail if SECRET is missing
+if (!RAW_JWT_SECRET) {
+  console.error(
+    "Missing JWT_SECRET environment variable. Set JWT_SECRET in your .env or environment."
+  );
+  throw new Error("Missing JWT_SECRET environment variable");
 }
+const JWT_SECRET: jwt.Secret = RAW_JWT_SECRET as jwt.Secret;
 
-/**
- * Register: POST /auth/register
- * body: { email, password, name }
- */
+// ---- Controllers ----
+
+// Register: POST /auth/register
 export async function register(req: Request, res: Response) {
   try {
     const { email, password, name } = req.body || {};
@@ -49,14 +37,16 @@ export async function register(req: Request, res: Response) {
       .limit(1);
 
     if (qErr) {
-      console.error(qErr);
+      console.error("DB error checking existing user:", qErr);
       return res.status(500).json({ message: "Database error" });
     }
     if (existing && (existing as any[]).length > 0)
       return res.status(400).json({ message: "User already exists" });
 
+    // hash password
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
 
+    // insert user and return id, email, name
     const { data, error } = await supabase
       .from("users")
       .insert([
@@ -70,23 +60,14 @@ export async function register(req: Request, res: Response) {
       .single();
 
     if (error) {
-      console.error(error);
+      console.error("DB insert error:", error);
       return res.status(500).json({ message: "Insert failed" });
     }
 
-    // Create token (use helper to validate/cast env vars)
-    let SECRET: jwt.Secret;
-    let expiresIn: SignOptions["expiresIn"];
-    try {
-      ({ SECRET, expiresIn } = getJwtConfig());
-    } catch (e) {
-      console.error(e);
-      return res.status(500).json({ message: "Server configuration error" });
-    }
-
-    const options: SignOptions = { expiresIn };
-
-    const token = jwt.sign({ id: data.id, email: data.email }, SECRET, options);
+    // Sign token with the typed secret and typed options
+    const token = jwt.sign({ id: data.id, email: data.email }, JWT_SECRET, {
+      expiresIn: JWT_EXPIRES_IN,
+    });
 
     return res.status(201).json({
       token,
@@ -98,16 +79,14 @@ export async function register(req: Request, res: Response) {
   }
 }
 
-/**
- * Login: POST /auth/login
- * body: { email, password }
- */
+// Login: POST /auth/login
 export async function login(req: Request, res: Response) {
   try {
     const { email, password } = req.body || {};
     if (!email || !password)
       return res.status(400).json({ message: "Email and password required" });
 
+    // fetch user row including hashed password
     const { data, error } = await supabase
       .from("users")
       .select("id, email, password, name")
@@ -116,7 +95,8 @@ export async function login(req: Request, res: Response) {
       .single();
 
     if (error) {
-      // not found or other db error
+      // user not found or other DB error
+      console.error("DB error fetching user for login:", error);
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -127,22 +107,15 @@ export async function login(req: Request, res: Response) {
       name?: string;
     };
 
+    // compare password
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ message: "Invalid credentials" });
 
-    // ensure env vars
-    let SECRET: jwt.Secret;
-    let expiresIn: SignOptions["expiresIn"];
-    try {
-      ({ SECRET, expiresIn } = getJwtConfig());
-    } catch (e) {
-      console.error(e);
-      return res.status(500).json({ message: "Server configuration error" });
-    }
+    // Sign token using the same JWT_SECRET and expiry defined above
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
+      expiresIn: JWT_EXPIRES_IN,
+    });
 
-    const options: SignOptions = { expiresIn };
-
-    const token = jwt.sign({ id: user.id, email: user.email }, SECRET, options);
     return res.json({
       token,
       user: { id: user.id, email: user.email, name: user.name },

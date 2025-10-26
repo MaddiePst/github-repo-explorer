@@ -3,14 +3,15 @@ import { Response } from "express";
 import { supabase } from "../Connections/supabaseClient";
 import { AuthRequest } from "../Middleware/authMiddleware";
 
-/**
- * GET /user/favorites
- */
+// GET /repo/favorites
 export async function getFavorites(req: AuthRequest, res: Response) {
   try {
+    //if authMiddleware didn’t populate req.user
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    // Extract the authenticated user's ID from DB.
     const userId = req.user.id;
 
+    // Calls Supabase to fetch rows from the favorites table
     const { data, error } = await supabase
       .from("favorites")
       .select("*")
@@ -28,12 +29,10 @@ export async function getFavorites(req: AuthRequest, res: Response) {
   }
 }
 
-/**
- * POST /user/favorites
- * body: { repo_id, repo_name, repo_full_name, repo_html_url, repo_description, repo_stars, repo_language }
- */
+// POST /repo/favorites
 export async function addFavorite(req: AuthRequest, res: Response) {
   try {
+    // require authenticated user
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     const userId = req.user.id;
     const payload = req.body || {};
@@ -41,7 +40,7 @@ export async function addFavorite(req: AuthRequest, res: Response) {
     if (!repo_id)
       return res.status(400).json({ message: "repo_id is required" });
 
-    // Insert or ignore duplicate unique constraint
+    // Inserts a new favorites row with the provided fields
     const { data, error } = await supabase
       .from("favorites")
       .insert([
@@ -59,6 +58,7 @@ export async function addFavorite(req: AuthRequest, res: Response) {
       .select("*")
       .single();
 
+    // DB error
     if (error) {
       // if unique violation you'd get an error; return message
       console.error(error);
@@ -74,11 +74,10 @@ export async function addFavorite(req: AuthRequest, res: Response) {
   }
 }
 
-/**
- * DELETE /user/favorites/:id
- */
+// DELETE /repo/favorites/:id
 export async function deleteFavorite(req: AuthRequest, res: Response) {
   try {
+    // ensures req.user exists
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     const id = req.params.id;
     if (!id) return res.status(400).json({ message: "Missing id" });
@@ -91,12 +90,14 @@ export async function deleteFavorite(req: AuthRequest, res: Response) {
       .limit(1)
       .single();
 
+    // If select error or no row found
     if (selErr || !existing) {
       return res.status(404).json({ message: "Not found" });
     }
     if (existing.user_id !== req.user.id)
       return res.status(403).json({ message: "Forbidden" });
 
+    // Deleting when id matches
     const { error } = await supabase.from("favorites").delete().eq("id", id);
     if (error) {
       console.error(error);
